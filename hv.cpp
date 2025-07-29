@@ -1,8 +1,11 @@
 #include <algorithm>
 #include <numeric>
+#include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
 #include <vector>
 
 using std::vector;
+namespace py = pybind11;
 
 template <class T>
 vector<T> filter_by_mask(const vector<T>& vec, const vector<bool>& mask){
@@ -82,4 +85,15 @@ double compute_hypervolume(
         hv += inclusive_hvs[i] - exclusive_hv;
     }
     return hv;
+}
+
+PYBIND11_MODULE(hvcpp, m) {
+    m.doc() = "Compute hypervolume in C++";
+    m.def(
+        "compute_hypervolume",
+        &compute_hypervolume,
+        "Compute the hypervolume of a Pareto front",
+        py::arg("sorted_pareto_sols"),
+        py::arg("ref_point")
+    );
 }
