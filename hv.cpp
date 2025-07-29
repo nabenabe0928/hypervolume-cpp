@@ -51,30 +51,10 @@ vector<bool> _is_pareto_front(const vector<vector<double>>& sorted_loss_values) 
     return on_front;
 }
 
-void verify_inputs(
-    const vector<vector<double>>& sorted_pareto_sols,
-    const vector<double>& ref_point    
-){
-    assert(
-        sorted_pareto_sols[0].size() == ref_point.size() &&
-        "The shape unmatch between ref_point and sorted_pareto_sols."
-    );
-    for (int i = 0; i < (int) sorted_pareto_sols.size() - 1; ++i) {
-        assert(
-            sorted_pareto_sols[i][0] <= sorted_pareto_sols[i + 1][0] &&
-            "sorted_pareto_sols should be sorted by the first objective."
-        );
-        for (int j = 0; j < ref_point.size(); ++j) {
-            assert(sorted_pareto_sols[i][j] <= ref_point[j] && "The Pareto solutions must be less than ref_point.");
-        }
-    }
-}
-
-double compute_hypervolume(
+double _compute_hypervolume(
     const vector<vector<double>>& sorted_pareto_sols,
     const vector<double>& ref_point
 ) {
-    verify_inputs(sorted_pareto_sols, ref_point);
     int n_trials = sorted_pareto_sols.size();
     int n_objectives = sorted_pareto_sols[0].size();
     vector<double> inclusive_hvs = vector<double>(n_trials, 1.0);
@@ -106,6 +86,26 @@ double compute_hypervolume(
         hv += inclusive_hvs[i] - exclusive_hv;
     }
     return hv;
+}
+
+double compute_hypervolume(
+    const vector<vector<double>>& sorted_pareto_sols,
+    const vector<double>& ref_point
+) {
+    assert(
+        sorted_pareto_sols[0].size() == ref_point.size() &&
+        "The shape unmatch between ref_point and sorted_pareto_sols."
+    );
+    for (int i = 0; i < (int) sorted_pareto_sols.size() - 1; ++i) {
+        assert(
+            sorted_pareto_sols[i][0] <= sorted_pareto_sols[i + 1][0] &&
+            "sorted_pareto_sols should be sorted by the first objective."
+        );
+        for (int j = 0; j < ref_point.size(); ++j) {
+            assert(sorted_pareto_sols[i][j] <= ref_point[j] && "The Pareto solutions must be less than ref_point.");
+        }
+    }
+    return _compute_hypervolume(sorted_pareto_sols, ref_point);
 }
 
 PYBIND11_MODULE(hvcpp, m) {

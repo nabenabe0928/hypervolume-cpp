@@ -18,10 +18,11 @@ for _ in range(10):
     X_unique = np.unique(rng.normal(size=(1000, n_objectives)), axis=0)
     sorted_pareto_sols = X_unique[_is_pareto_front(X_unique, True)]
     start = time.time()
-    hvcpp.compute_hypervolume(sorted_pareto_sols, ref_point)
+    out = hvcpp.compute_hypervolume(sorted_pareto_sols, ref_point)
     runtime_cpp += time.time() - start
     start = time.time()
-    compute_hypervolume(sorted_pareto_sols, ref_point, assume_pareto=True)
+    ans = compute_hypervolume(sorted_pareto_sols, ref_point, assume_pareto=True)
     runtime_python += time.time() - start
+    assert np.isclose(out, ans)
 
 print(f"{runtime_cpp=}, {runtime_python=}")
