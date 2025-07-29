@@ -82,7 +82,7 @@ double _compute_hypervolume(
         }
         vector<bool> on_front = _is_pareto_front(limited_loss_values);
         vector<vector<double>> pareto_sols = filter_by_mask(limited_loss_values, on_front);
-        double exclusive_hv = compute_hypervolume(pareto_sols, ref_point);
+        double exclusive_hv = _compute_hypervolume(pareto_sols, ref_point);
         hv += inclusive_hvs[i] - exclusive_hv;
     }
     return hv;
