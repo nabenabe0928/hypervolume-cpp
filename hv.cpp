@@ -17,7 +17,7 @@ vector<T> filter_by_mask(const vector<T>& vec, const vector<bool>& mask){
     return out;
 }
 
-vector<bool> is_pareto_front(const vector<vector<double>>& sorted_loss_values) {
+vector<bool> _is_pareto_front(const vector<vector<double>>& sorted_loss_values) {
     // No consideration of duplications.
     int n_trials = sorted_loss_values.size();
     int n_objectives = sorted_loss_values[0].size();
@@ -76,7 +76,7 @@ double compute_hypervolume(
                 limited_loss_values[j - i - 1][k] = std::max(sorted_pareto_sols[i][k], sorted_pareto_sols[j][k]);
             }
         }
-        vector<bool> on_front = is_pareto_front(limited_loss_values);
+        vector<bool> on_front = _is_pareto_front(limited_loss_values);
         vector<vector<double>> pareto_sols = filter_by_mask(limited_loss_values, on_front);
         double exclusive_hv = compute_hypervolume(pareto_sols, ref_point);
         hv += inclusive_hvs[i] - exclusive_hv;
