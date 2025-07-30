@@ -1,12 +1,12 @@
 #include <algorithm>
 #include <cassert>
 #include <numeric>
-#include <pybind11/pybind11.h>
-#include <pybind11/stl.h>
+//#include <pybind11/pybind11.h>
+//#include <pybind11/stl.h>
 #include <vector>
 
 using std::vector;
-namespace py = pybind11;
+//namespace py = pybind11;
 
 int _pack_pareto_sols(
     vector<vector<double>>& sorted_loss_values,
@@ -20,11 +20,11 @@ int _pack_pareto_sols(
     int n_remaining = n_trials;
     int head_index = 0;
     while (n_remaining > 0) {
-        int new_nondominated_index = nondominated_indices_buf[0];
+        const int& new_nondominated_index = nondominated_indices_buf[0];
         int nondominated_count = 0;
         const auto& new_nondominated_sol = sorted_loss_values[new_nondominated_index];
         for (int i = 1; i < n_remaining; ++i) {
-            int idx = nondominated_indices_buf[i];
+            const int& idx = nondominated_indices_buf[i];
             const auto& cand = sorted_loss_values[idx];
             bool is_nondominated = false;
             for (int j = 1; j < n_objectives; ++j) {
@@ -54,8 +54,9 @@ double _compute_hypervolume(
     double hv = 0.0;
     for (int i = 0; i < n_trials; ++i) {
         double inclusive_hv = 1.0;
+        const auto& vals_i = sorted_pareto_sols[i];
         for (int j = 0; j < n_objectives; ++j) {
-            inclusive_hv *= ref_point[j] - sorted_pareto_sols[i][j];
+            inclusive_hv *= ref_point[j] - vals_i[j];
         }
         // The early additions of the hypervolume breaks the compatibility with the Python version.
         hv += inclusive_hv;
@@ -64,8 +65,9 @@ double _compute_hypervolume(
         return hv;
     } else if (n_trials == 2) {
         double intersec = 1.0;
+        const auto& vals1 = sorted_pareto_sols[0], vals2 = sorted_pareto_sols[1];
         for (int j = 0; j < n_objectives; ++j) {
-            double v1 = sorted_pareto_sols[0][j], v2 = sorted_pareto_sols[1][j];
+            const double& v1 = vals1[j], v2 = vals2[j];
             intersec *= ref_point[j] - (v1 > v2 ? v1 : v2);
         }
         return hv - intersec;
@@ -73,10 +75,13 @@ double _compute_hypervolume(
     vector<vector<double>> limited_loss_values(n_trials, vector<double>(n_objectives));
     for (int i = 0; i < n_trials - 1; ++i) {
         const int end_index = n_trials - i - 1;
+        const auto& vals_i = sorted_pareto_sols[i];
         for (int j = 0; j < end_index; ++j) {
+            const auto& vals_j = sorted_pareto_sols[j + i + 1];
+            auto& target = limited_loss_values[j];
             for (int k = 0; k < n_objectives; ++k) {
-                double v1 = sorted_pareto_sols[i][k], v2 = sorted_pareto_sols[j + i + 1][k];
-                limited_loss_values[j][k] = v1 > v2 ? v1 : v2;
+                const double& v1 = vals_i[k], v2 = vals_j[k];
+                target[k] = v1 > v2 ? v1 : v2;
             }
         }
         if (end_index <= 2) {
@@ -110,6 +115,11 @@ double compute_hypervolume(
     return _compute_hypervolume(sorted_pareto_sols, ref_point, nondominated_indices_buf);
 }
 
+int main(void){
+    return 0;   
+}
+
+/*
 PYBIND11_MODULE(hvcpp, m) {
     m.doc() = "Compute hypervolume in C++";
     m.def(
@@ -120,3 +130,4 @@ PYBIND11_MODULE(hvcpp, m) {
         py::arg("ref_point")
     );
 }
+*/
