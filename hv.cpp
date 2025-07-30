@@ -25,8 +25,8 @@ vector<T> filter_by_mask(const vector<T>& vec, const vector<bool>& mask){
 
 vector<bool> _is_pareto_front(const vector<vector<double>>& sorted_loss_values) {
     // No consideration of duplications.
-    int n_trials = sorted_loss_values.size();
-    int n_objectives = sorted_loss_values[0].size();
+    const int n_trials = sorted_loss_values.size();
+    const int n_objectives = sorted_loss_values[0].size();
     vector<bool> on_front = vector<bool>(n_trials, false);
     vector<int> nondominated_indices(n_trials);
     std::iota(nondominated_indices.begin(), nondominated_indices.end(), 0);
@@ -57,8 +57,8 @@ double _compute_hypervolume(
     const vector<vector<double>>& sorted_pareto_sols,
     const vector<double>& ref_point
 ) {
-    int n_trials = sorted_pareto_sols.size();
-    int n_objectives = sorted_pareto_sols[0].size();
+    const int n_trials = sorted_pareto_sols.size();
+    const int n_objectives = sorted_pareto_sols[0].size();
     vector<double> inclusive_hvs = vector<double>(n_trials, 1.0);
     for (int i = 0; i < n_trials; ++i) {
         for (int j = 0; j < n_objectives; ++j) {
@@ -74,7 +74,7 @@ double _compute_hypervolume(
         }
         return inclusive_hvs[0] + inclusive_hvs[1] - intersec;
     }
-    double hv = inclusive_hvs[n_trials - 1];
+    double hv = 0.0;
     for (int i = 0; i < n_trials - 1; ++i) {
         vector<vector<double>> limited_loss_values(n_trials - i - 1, vector<double>(n_objectives));
         for (int j = i + 1; j < n_trials; ++j) {
@@ -84,9 +84,10 @@ double _compute_hypervolume(
         }
         vector<bool> on_front = _is_pareto_front(limited_loss_values);
         vector<vector<double>> pareto_sols = filter_by_mask(limited_loss_values, on_front);
-        double exclusive_hv = _compute_hypervolume(pareto_sols, ref_point);
-        hv += inclusive_hvs[i] - exclusive_hv;
+        hv += inclusive_hvs[i] - _compute_hypervolume(pareto_sols, ref_point);
     }
+    // Add the last inclusive hypervolume to be accurate up to the 64bit precision of the Python implementation.
+    hv += inclusive_hvs[n_trials - 1];
     return hv;
 }
 
