@@ -10,18 +10,6 @@
 using std::vector;
 // namespace py = pybind11;
 
-template <class T>
-vector<T> filter_by_mask(const vector<T>& vec, const vector<bool>& mask, const int end_index = -1){
-    vector<T> out;
-    const int vec_size = end_index == -1 ? vec.size() : end_index;
-    for (int i = 0; i < vec_size; ++i){
-        if (mask[i]){
-            out.push_back(vec[i]);
-        }
-    }
-    return out;
-}
-
 void _is_pareto_front(
     const vector<vector<double>>& sorted_loss_values,
     vector<bool>& on_front_buf,
@@ -54,6 +42,21 @@ void _is_pareto_front(
             }
         }
         n_remaining = nondominated_count;
+    }
+}
+
+void _pack_pareto_sols(
+    vector<vector<double>>& sorted_loss_values,
+    vector<bool>& on_front_buf,
+    const int end_index = -1
+) {
+    _is_pareto_front(sorted_loss_values, on_front_buf, end_index);
+    int head_index = 0;
+    for (int i = 0; i < end_index; ++i) {
+        if (!on_front_buf[i]) {
+            continue;
+        }
+        sorted_loss_values[head_index++] = sorted_loss_values[i];
     }
 }
 
@@ -91,9 +94,13 @@ double _compute_hypervolume(
                 limited_loss_values[j][k] = std::max(sorted_pareto_sols[i][k], sorted_pareto_sols[j + i + 1][k]);
             }
         }
-        _is_pareto_front(limited_loss_values, on_front, end_index);
-        vector<vector<double>> pareto_sols = filter_by_mask(limited_loss_values, on_front, end_index);
-        hv -= _compute_hypervolume(pareto_sols, ref_point);
+        if (end_index <= 3) {
+            hv -= _compute_hypervolume(limited_loss_values, ref_point, end_index);
+            continue;
+        }
+        _pack_pareto_sols(limited_loss_values, on_front, end_index);
+        const int n_pareto_sols = std::count(on_front.begin(), on_front.begin() + end_index, true);
+        hv -= _compute_hypervolume(limited_loss_values, ref_point, n_pareto_sols);
     }
     return hv;
 }
