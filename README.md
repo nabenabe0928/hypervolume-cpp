@@ -3,6 +3,8 @@
 Please build the C++ file so that you can call our module from your Python project:
 
 ```shell
+$ git clone git@github.com:nabenabe0928/hypervolume-cpp.git
+$ cd hypervolume-cpp
 $ mkdir build && cd build
 $ cmake ..
 $ make
