@@ -11,11 +11,10 @@ using std::vector;
 // namespace py = pybind11;
 
 template <class T>
-vector<T> filter_by_mask(const vector<T>& vec, const vector<bool>& mask){
+vector<T> filter_by_mask(const vector<T>& vec, const vector<bool>& mask, const int end_index = -1){
     vector<T> out;
-    // reserve so we don’t re‑allocate too often.
-    out.reserve(std::count(mask.begin(), mask.end(), true));
-    for (int i = 0; i < (int) vec.size(); ++i){
+    const int vec_size = end_index == -1 ? vec.size() : end_index;
+    for (int i = 0; i < vec_size; ++i){
         if (mask[i]){
             out.push_back(vec[i]);
         }
@@ -23,17 +22,23 @@ vector<T> filter_by_mask(const vector<T>& vec, const vector<bool>& mask){
     return out;
 }
 
-vector<bool> _is_pareto_front(const vector<vector<double>>& sorted_loss_values) {
+void _is_pareto_front(
+    const vector<vector<double>>& sorted_loss_values,
+    vector<bool>& on_front_buf,
+    const int end_index = -1
+) {
     // No consideration of duplications.
-    const int n_trials = sorted_loss_values.size();
+    const int n_trials = end_index == -1 ? sorted_loss_values.size() : end_index;
     const int n_objectives = sorted_loss_values[0].size();
-    vector<bool> on_front = vector<bool>(n_trials, false);
+    for (int i = 0; i < n_trials; ++i) {
+        on_front_buf[i] = false;  // Initialize the buffer to false.
+    }
     vector<int> nondominated_indices(n_trials);
     std::iota(nondominated_indices.begin(), nondominated_indices.end(), 0);
     int n_remaining = n_trials;
     while (n_remaining > 0) {
         int head = nondominated_indices[0];
-        on_front[head] = true;
+        on_front_buf[head] = true;
         int nondominated_count = 0;
         for (int i = 1; i < n_remaining; ++i) {
             int idx = nondominated_indices[i];
@@ -50,44 +55,45 @@ vector<bool> _is_pareto_front(const vector<vector<double>>& sorted_loss_values) 
         }
         n_remaining = nondominated_count;
     }
-    return on_front;
 }
 
 double _compute_hypervolume(
     const vector<vector<double>>& sorted_pareto_sols,
-    const vector<double>& ref_point
+    const vector<double>& ref_point,
+    const int end_index = -1
 ) {
-    const int n_trials = sorted_pareto_sols.size();
+    const int n_trials = end_index == -1 ? sorted_pareto_sols.size() : end_index;
     const int n_objectives = sorted_pareto_sols[0].size();
-    vector<double> inclusive_hvs = vector<double>(n_trials, 1.0);
+    double hv = 0.0;
     for (int i = 0; i < n_trials; ++i) {
+        double inclusive_hv = 1.0;
         for (int j = 0; j < n_objectives; ++j) {
-            inclusive_hvs[i] *= ref_point[j] - sorted_pareto_sols[i][j];
+            inclusive_hv *= ref_point[j] - sorted_pareto_sols[i][j];
         }
+        // The early additions of the hypervolume breaks the compatibility with the Python version.
+        hv += inclusive_hv;
     }
     if (n_trials == 1) {
-        return inclusive_hvs[0];
+        return hv;
     } else if (n_trials == 2) {
         double intersec = 1.0;
         for (int j = 0; j < n_objectives; ++j) {
             intersec *= ref_point[j] - std::max(sorted_pareto_sols[0][j], sorted_pareto_sols[1][j]);
         }
-        return inclusive_hvs[0] + inclusive_hvs[1] - intersec;
+        return hv - intersec;
     }
-    double hv = 0.0;
+    vector<vector<double>> limited_loss_values(n_trials, vector<double>(n_objectives));
+    vector<bool> on_front(n_trials, false);
     for (int i = 0; i < n_trials - 1; ++i) {
-        vector<vector<double>> limited_loss_values(n_trials - i - 1, vector<double>(n_objectives));
         for (int j = i + 1; j < n_trials; ++j) {
             for (int k = 0; k < n_objectives; ++k) {
                 limited_loss_values[j - i - 1][k] = std::max(sorted_pareto_sols[i][k], sorted_pareto_sols[j][k]);
             }
         }
-        vector<bool> on_front = _is_pareto_front(limited_loss_values);
-        vector<vector<double>> pareto_sols = filter_by_mask(limited_loss_values, on_front);
-        hv += inclusive_hvs[i] - _compute_hypervolume(pareto_sols, ref_point);
+        _is_pareto_front(limited_loss_values, on_front, n_trials - i - 1);
+        vector<vector<double>> pareto_sols = filter_by_mask(limited_loss_values, on_front, n_trials - i - 1);
+        hv -= _compute_hypervolume(pareto_sols, ref_point);
     }
-    // Add the last inclusive hypervolume to be accurate up to the 64bit precision of the Python implementation.
-    hv += inclusive_hvs[n_trials - 1];
     return hv;
 }
 
