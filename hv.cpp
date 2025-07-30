@@ -85,13 +85,14 @@ double _compute_hypervolume(
     vector<vector<double>> limited_loss_values(n_trials, vector<double>(n_objectives));
     vector<bool> on_front(n_trials, false);
     for (int i = 0; i < n_trials - 1; ++i) {
-        for (int j = i + 1; j < n_trials; ++j) {
+        const int end_index = n_trials - i - 1;
+        for (int j = 0; j < end_index; ++j) {
             for (int k = 0; k < n_objectives; ++k) {
-                limited_loss_values[j - i - 1][k] = std::max(sorted_pareto_sols[i][k], sorted_pareto_sols[j][k]);
+                limited_loss_values[j][k] = std::max(sorted_pareto_sols[i][k], sorted_pareto_sols[j + i + 1][k]);
             }
         }
-        _is_pareto_front(limited_loss_values, on_front, n_trials - i - 1);
-        vector<vector<double>> pareto_sols = filter_by_mask(limited_loss_values, on_front, n_trials - i - 1);
+        _is_pareto_front(limited_loss_values, on_front, end_index);
+        vector<vector<double>> pareto_sols = filter_by_mask(limited_loss_values, on_front, end_index);
         hv -= _compute_hypervolume(pareto_sols, ref_point);
     }
     return hv;
