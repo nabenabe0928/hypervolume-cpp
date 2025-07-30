@@ -7,7 +7,7 @@ from optuna.study._multi_objective import _is_pareto_front
 
 n_objectives = 5
 rng = np.random.RandomState(42)
-X_unique = np.unique(rng.normal(size=(100, n_objectives)), axis=0)
+X_unique = np.unique(rng.normal(size=(400, n_objectives)), axis=0)
 sorted_pareto_sols = X_unique[_is_pareto_front(X_unique, True)]
 ref_point = np.full(n_objectives, 10.0)
 print(hvcpp.compute_hypervolume(sorted_pareto_sols, ref_point))
