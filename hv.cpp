@@ -11,8 +11,8 @@ namespace py = pybind11;
 int _pack_pareto_sols(
     vector<vector<double>>& sorted_loss_values,
     int* nondominated_indices_buf,
-    const int n_max_trials,
-    const int n_objectives,
+    const int& n_max_trials,
+    const int& n_objectives,
     const int end_index = -1
 ) {
     // No consideration of duplications.
@@ -48,8 +48,8 @@ double _compute_hypervolume(
     const vector<vector<double>>& sorted_pareto_sols,
     const double* ref_point,
     int* nondominated_indices_buf,
-    const int n_max_trials,
-    const int n_objectives,
+    const int& n_max_trials,
+    const int& n_objectives,
     const int end_index = -1
 ) {
     const int n_trials = end_index == -1 ? n_max_trials : end_index;
