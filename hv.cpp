@@ -8,28 +8,25 @@
 using std::vector;
 namespace py = pybind11;
 
-int _pack_pareto_sols(
-    vector<vector<double>>& sorted_loss_values,
+inline int _pack_pareto_sols(
+    vector<double>& sorted_loss_values,
     int* nondominated_indices_buf,
-    const int& n_max_trials,
     const int& n_objectives,
-    const int end_index = -1
+    const int end_row_index
 ) {
-    // No consideration of duplications.
-    const int n_trials = end_index == -1 ? n_max_trials : end_index;
-    std::iota(nondominated_indices_buf, nondominated_indices_buf + end_index, 0);
-    int n_remaining = n_trials;
-    int head_index = 0;
+    // No consideration of duplicated Pareto solutions.
+    auto value_at = [&](int i, int j)->double& {return sorted_loss_values[i * n_objectives + j];};
+    std::iota(nondominated_indices_buf, nondominated_indices_buf + end_row_index, 0);
+    int n_remaining = end_row_index;
+    int head_row_index = 0;
     while (n_remaining > 0) {
         const int new_nondominated_index = nondominated_indices_buf[0];
         int nondominated_count = 0;
-        const auto& new_nondominated_sol = sorted_loss_values[new_nondominated_index];
         for (int i = 1; i < n_remaining; ++i) {
             const int& idx = nondominated_indices_buf[i];
-            const auto& cand = sorted_loss_values[idx];
             bool is_nondominated = false;
             for (int j = 1; j < n_objectives; ++j) {
-                if (cand[j] < new_nondominated_sol[j]) {
+                if (value_at(idx, j) < value_at(new_nondominated_index, j)) {
                     is_nondominated = true;
                     break;
                 }
@@ -38,58 +35,60 @@ int _pack_pareto_sols(
                 nondominated_indices_buf[nondominated_count++] = idx;
             }
         }
-        std::swap(sorted_loss_values[head_index++], sorted_loss_values[new_nondominated_index]);
+        std::swap_ranges(
+            sorted_loss_values.begin() + (head_row_index * n_objectives),
+            sorted_loss_values.begin() + ((head_row_index + 1) * n_objectives),
+            sorted_loss_values.begin() + (new_nondominated_index * n_objectives)
+        );
+        ++head_row_index;
         n_remaining = nondominated_count;
     }
-    return head_index;
+    return head_row_index; // Return the number of Pareto solutions.
 }
 
 double _compute_hypervolume(
-    const vector<vector<double>>& sorted_pareto_sols,
+    const vector<double>& sorted_pareto_sols,
     const double* ref_point,
     int* nondominated_indices_buf,
-    const int& n_max_trials,
     const int& n_objectives,
-    const int end_index = -1
+    const int end_row_index
 ) {
-    const int n_trials = end_index == -1 ? n_max_trials : end_index;
     double hv = 0.0;
-    for (int i = 0; i < n_trials; ++i) {
+    for (int i = 0; i < end_row_index; ++i) {
         double inclusive_hv = 1.0;
-        const auto& vals_i = sorted_pareto_sols[i];
         for (int j = 0; j < n_objectives; ++j) {
-            inclusive_hv *= ref_point[j] - vals_i[j];
+            inclusive_hv *= ref_point[j] - sorted_pareto_sols[i * n_objectives + j];
         }
         // The early additions of the hypervolume breaks the compatibility with the Python version.
         hv += inclusive_hv;
     }
-    if (n_trials == 1) {
+
+    auto value_at = [&](int i, int j)->const double& {return sorted_pareto_sols[i * n_objectives + j];};
+    if (end_row_index == 1) {
         return hv;
-    } else if (n_trials == 2) {
+    } else if (end_row_index == 2) {
         double intersec = 1.0;
-        const auto& vals1 = sorted_pareto_sols[0], vals2 = sorted_pareto_sols[1];
         for (int j = 0; j < n_objectives; ++j) {
-            intersec *= ref_point[j] - std::max(vals1[j], vals2[j]);
+            intersec *= ref_point[j] - std::max(value_at(0, j), value_at(1, j));
         }
         return hv - intersec;
     }
-    vector<vector<double>> limited_loss_values(n_trials, vector<double>(n_objectives));
-    for (int i = 0; i < n_trials - 1; ++i) {
-        const int end_index = n_trials - i - 1;
-        const auto& vals_i = sorted_pareto_sols[i];
-        for (int j = 0; j < end_index; ++j) {
-            const auto& vals_j = sorted_pareto_sols[j + i + 1];
-            auto& target = limited_loss_values[j];
+    vector<double> limited_loss_values(end_row_index * n_objectives);
+    for (int i = 0; i < end_row_index - 1; ++i) {
+        int end_row_index_limited = end_row_index - i - 1;
+        for (int j = 0; j < end_row_index_limited; ++j) {
             for (int k = 0; k < n_objectives; ++k) {
-                target[k] = std::max(vals_i[k], vals_j[k]);
+                limited_loss_values[j * n_objectives + k] = std::max(value_at(i, k), value_at(j + i + 1, k));
             }
         }
-        if (end_index <= 2) {
-            hv -= _compute_hypervolume(limited_loss_values, ref_point, nondominated_indices_buf, n_max_trials, n_objectives, end_index);
-            continue;
+        if (end_row_index_limited > 2) {
+            end_row_index_limited = _pack_pareto_sols(
+                limited_loss_values, nondominated_indices_buf, n_objectives, end_row_index_limited
+            );
         }
-        const int n_pareto_sols = _pack_pareto_sols(limited_loss_values, nondominated_indices_buf, n_max_trials, n_objectives, end_index);
-        hv -= _compute_hypervolume(limited_loss_values, ref_point, nondominated_indices_buf, n_max_trials, n_objectives, n_pareto_sols);
+        hv -= _compute_hypervolume(
+            limited_loss_values, ref_point, nondominated_indices_buf, n_objectives, end_row_index_limited
+        );
     }
     return hv;
 }
@@ -114,7 +113,15 @@ double compute_hypervolume(
     vector<int> nondominated_indices_buf(sorted_pareto_sols.size());
     int n_max_trials = sorted_pareto_sols.size();
     int n_objectives = sorted_pareto_sols[0].size();
-    return _compute_hypervolume(sorted_pareto_sols, ref_point.data(), nondominated_indices_buf.data(), n_max_trials, n_objectives);
+    vector<double> flattened_sorted_pareto_sols(n_max_trials * n_objectives);
+    for (int i = 0; i < n_max_trials; ++i) {
+        for (int j = 0; j < n_objectives; ++j) {
+            flattened_sorted_pareto_sols[i * n_objectives + j] = sorted_pareto_sols[i][j];
+        }
+    }
+    return _compute_hypervolume(
+        flattened_sorted_pareto_sols, ref_point.data(), nondominated_indices_buf.data(), n_objectives, n_max_trials
+    );
 }
 
 PYBIND11_MODULE(hvcpp, m) {
