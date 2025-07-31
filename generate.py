@@ -8,7 +8,8 @@ X = np.unique(rng.normal(size=(100, 4)), axis=0)
 pareto_sols = X[optuna.study._multi_objective._is_pareto_front(X, True)]
 hv = optuna._hypervolume.compute_hypervolume(pareto_sols, np.full(4, 10.0), assume_pareto=True)
 print(pareto_sols, hv, hvcpp.compute_hypervolume(pareto_sols, np.full(4, 10.0)))
-s = "{"
+print("int main(void) {")
+s = "\tvector<vector<double>> sorted_pareto_sols = {"
 for i, vs in enumerate(pareto_sols):
     s += "{"
     for j, v in enumerate(vs):
@@ -16,3 +17,9 @@ for i, vs in enumerate(pareto_sols):
     s += "}," if i < len(pareto_sols) - 1 else "}"
 s += "};"
 print(s)
+print("\tvector<double>ref_point = {10.0, 10.0, 10.0, 10.0};")
+print("\tdouble hv = compute_hypervolume(sorted_pareto_sols, ref_point);")
+print("\tstd::cout << std::setprecision(17) << hv << std::endl;")
+print(f"\tstd::cout << {hv} << std::endl;")
+print("\treturn 0;")
+print("}")
